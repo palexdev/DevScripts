@@ -1,9 +1,9 @@
-package git;
+package src.git;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static commons.Logger.LOGGER;
+import static src.commons.Logger.LOGGER;
 
 public record ModuleRelease(String module, String version, Commit commit) {
 

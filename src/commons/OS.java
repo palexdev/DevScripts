@@ -1,4 +1,4 @@
-package commons;
+package src.commons;
 
 public enum OS {
     Windows, Linux, MacOS, Other;

@@ -1,9 +1,9 @@
-package git;
+package src.git;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import commons.Command;
+import src.commons.Command;
 
 /// Retrieves all the releases commits (denoted by :bookmark:)
 public class GitReleaseCommitsCommand extends Command<List<Commit>> {

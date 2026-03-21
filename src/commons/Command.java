@@ -1,6 +1,6 @@
-package commons;
+package src.commons;
 
-import java.nio.charset.StandardCharsets;import java.util.Arrays;import java.util.concurrent.CompletableFuture;import java.util.concurrent.CompletionException;import static commons.Logger.LOGGER;//@formatter:off
+import java.nio.charset.StandardCharsets;import java.util.Arrays;import java.util.concurrent.CompletableFuture;import java.util.concurrent.CompletionException;import static src.commons.Logger.LOGGER;//@formatter:off
 public abstract class Command<T> {
     protected abstract String[] args();
     protected abstract T parse(String output);

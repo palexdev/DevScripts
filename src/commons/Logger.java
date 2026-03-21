@@ -1,10 +1,10 @@
-package commons;
+package src.commons;
 
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 
-import static commons.Utils.currentTime;
+import static src.commons.Utils.currentTime;
 
 //@formatter:off
 public class Logger {

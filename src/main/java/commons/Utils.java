@@ -8,6 +8,8 @@ import git.Commit;
 
 public class Utils {
 
+    public static final String TRANSITIONING = "palexdev.devtools.transitioning";
+
     private Utils() {}
 
     public static String instantToDate(Instant instant) {

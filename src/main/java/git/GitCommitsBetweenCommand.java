@@ -34,11 +34,12 @@ public class GitCommitsBetweenCommand extends Command<List<Commit>> {
         List<Commit> commits = new ArrayList<>();
         String[] lines = output.split("\n");
         for (int i = 0; i < lines.length - 2; i += 3) {
-            LOGGER.trace("Parsing commit: " + lines[i]);
+            LOGGER.trace("Parsing commit: " + lines[i + 1]);
             long timestamp = Long.parseLong(lines[i].trim());
             String hash = lines[i + 1].trim();
             String header = lines[i + 2].trim();
             Matcher matcher = SCOPE_PATTERN.matcher(header);
+            LOGGER.trace("Matching against: " + header);
             if (matcher.find() && Arrays.stream(matcher.group(1).split(","))
                 .map(String::trim)
                 .anyMatch(module::equals)

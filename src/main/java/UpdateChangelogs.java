@@ -32,6 +32,7 @@ import java.util.*;
 
 import commons.Command;
 import commons.Logger.LogLevel;
+import commons.Utils;
 import git.*;
 import git.GitMojis.Category;
 
@@ -98,6 +99,7 @@ public class UpdateChangelogs {
             LOGGER.info("Found releases: " + String.join(",", releases.stream().map(ModuleRelease::module).toList()));
             for (ModuleRelease release : releases) {
                 String module = release.module();
+                LOGGER.trace("Processing module: " + module);
                 Path path = CHANGELOGS_PATH.resolve(module + ".md");
                 var writer = new ModuleChangelogWriter(path, release);
                 String lastHash = writer.readLastHash();
@@ -107,6 +109,14 @@ public class UpdateChangelogs {
                 }
 
                 String prevReleaseHash = findPrevGitRelease(module, releaseCommits, releaseCommits.getFirst());
+                if (Boolean.getBoolean(Utils.TRANSITIONING) && prevReleaseHash == null) {
+                    LOGGER.warn("Could not find previous release for module %s".formatted(module));
+                    prevReleaseHash = IO.readln("Prev release hash: ").trim();
+                    if (prevReleaseHash.isBlank()) {
+                        LOGGER.error("Invalid hash, skipping...");
+                        continue;
+                    }
+                }
                 List<Commit> commits = new GitCommitsBetweenCommand(prevReleaseHash, release.commit().hash(), module).exec();
                 if (commits.isEmpty()) {
                     LOGGER.info("No changes found for module %s, skipping...".formatted(module));
@@ -156,6 +166,11 @@ public class UpdateChangelogs {
         if (logArg != null && logArg.startsWith("--log-level=")) {
             String level = logArg.split("=", 2)[1];
             LOGGER.atLevel(LogLevel.valueOf(level.toUpperCase()));
+        }
+
+        String transitioningArg = toArgsSet.ceiling("--transitioning");
+        if ("--transitioning".equals(transitioningArg)) {
+            System.setProperty(Utils.TRANSITIONING, "true");
         }
     }
 

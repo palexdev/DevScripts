@@ -1,10 +1,10 @@
-package src.commons;
+package commons;
 
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 
-import src.git.Commit;
+import git.Commit;
 
 public class Utils {
 

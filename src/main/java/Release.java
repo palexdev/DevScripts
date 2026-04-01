@@ -1,5 +1,3 @@
-package src;
-
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -7,21 +5,16 @@ import java.util.List;
 import java.util.NavigableSet;
 import java.util.TreeSet;
 
-import src.commons.Command;
-import src.commons.Logger.LogLevel;
-import src.commons.OS;
-import src.commons.ProcessOutputPolicy;
-import src.git.Commit;
-import src.git.GitHeadCommitCommand;
-import src.git.ModuleRelease;
+import commons.Command;
+import commons.Logger.LogLevel;
+import commons.OS;
+import commons.ProcessOutputPolicy;
+import git.Commit;
+import git.GitHeadCommitCommand;
+import git.ModuleRelease;
 
-import static src.commons.Logger.LOGGER;
-import static src.commons.OS.os;
-
-/// usr/bin/env jbang "$0" "$@" ; exit $?
-// JAVA 25+
-// SOURCES commons/*.java
-// SOURCES git/*.java
+import static commons.Logger.LOGGER;
+import static commons.OS.os;
 
 // @formatter:off
 public class Release {

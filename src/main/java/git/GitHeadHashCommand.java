@@ -1,6 +1,6 @@
-package src.git;
+package git;
 
-import src.commons.Command;
+import commons.Command;
 
 //@formatter:off
 /// Retrieves the HEAD commit short hash

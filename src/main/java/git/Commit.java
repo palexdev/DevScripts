@@ -1,8 +1,8 @@
-package src.git;
+package git;
 
 import java.time.Instant;
 
-import src.commons.Utils;
+import commons.Utils;
 
 public record Commit(
     long timestamp,

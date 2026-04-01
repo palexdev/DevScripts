@@ -1,4 +1,4 @@
-package src.git;
+package git;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -6,9 +6,9 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import src.commons.Command;
+import commons.Command;
 
-import static src.commons.Logger.LOGGER;
+import static commons.Logger.LOGGER;
 
 /// Finds all the commits in a range filtered for a specific module (works for multi modules commits too)
 public class GitCommitsBetweenCommand extends Command<List<Commit>> {

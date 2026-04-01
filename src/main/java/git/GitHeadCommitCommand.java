@@ -1,6 +1,6 @@
-package src.git;
+package git;
 
-import src.commons.Command;
+import commons.Command;
 
 public class GitHeadCommitCommand extends Command<Commit> {
     @Override

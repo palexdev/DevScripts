@@ -1,4 +1,3 @@
-package src;//================================================================================
 // CONVENTIONS
 //================================================================================
 // Commit messages: <:gitmoji:> (<modules>) <message>
@@ -31,20 +30,15 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.*;
 
-import src.commons.Command;
-import src.commons.Logger.LogLevel;
-import src.git.*;
-import src.git.GitMojis.Category;
+import commons.Command;
+import commons.Logger.LogLevel;
+import git.*;
+import git.GitMojis.Category;
 
-import static src.commons.Logger.LOGGER;
-import static src.commons.Utils.findPrevGitRelease;
-import static src.commons.Utils.instantToDate;
+import static commons.Logger.LOGGER;
+import static commons.Utils.findPrevGitRelease;
+import static commons.Utils.instantToDate;
 import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
-
-/// usr/bin/env jbang "$0" "$@" ; exit $?
-// JAVA 25+
-// SOURCES commons/*.java
-// SOURCES git/*.java
 
 //@formatter:off
 public class UpdateChangelogs {

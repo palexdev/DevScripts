@@ -1,4 +1,4 @@
-package src.git;
+package git;
 
 import java.util.List;
 import java.util.Map;

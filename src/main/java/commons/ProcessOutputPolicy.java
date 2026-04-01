@@ -1,4 +1,4 @@
-package src.commons;
+package commons;
 
 public enum ProcessOutputPolicy {
     INHERIT {

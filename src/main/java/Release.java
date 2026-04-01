@@ -10,7 +10,7 @@ import commons.Logger.LogLevel;
 import commons.OS;
 import commons.ProcessOutputPolicy;
 import git.Commit;
-import git.GitHeadCommitCommand;
+import git.GitReleaseCommitsCommand;
 import git.ModuleRelease;
 
 import static commons.Logger.LOGGER;
@@ -30,10 +30,14 @@ public class Release {
 
     static void run() {
         try {
-            Commit head = new GitHeadCommitCommand().exec();
-            LOGGER.debug("Head commit: [%s] %s".formatted(head.hash(), head.header()));
+            List<Commit> releaseCommits = new GitReleaseCommitsCommand().exec();
+            if (releaseCommits.isEmpty()) {
+                throw new RuntimeException("No release commits found.");
+            }
+            Commit release = releaseCommits.getFirst();
+            LOGGER.debug("Head commit: [%s] %s".formatted(release.hash(), release.header()));
 
-            List<ModuleRelease> releases = ModuleRelease.parseAll(head);
+            List<ModuleRelease> releases = ModuleRelease.parseAll(release);
             if (releases.isEmpty()) {
                 LOGGER.info("✅ No modules to release.");
                 return;

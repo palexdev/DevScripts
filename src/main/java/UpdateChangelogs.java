@@ -137,10 +137,10 @@ public class UpdateChangelogs {
             Command.command("git", "config", "user.name", COMMIT_USER).exec();
             Command.command("git", "config", "user.email", COMMIT_MAIL).exec();
             LOGGER.debug("Configured git...");
-            Command.command("git", "add", ".").exec();
+            Command.command("git", "add", "changelogs/*").exec();
             LOGGER.debug("Added all files...");
             Command.command(
-                "git", "commit", "--all",
+                "git", "commit",
                 "-m", ":memo: (project) Updated changelogs!",
                 "--author=%s".formatted(COMMIT_AUTHOR)
             ).exec();

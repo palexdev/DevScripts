@@ -10,7 +10,7 @@ import commons.Utils;
 import static commons.Logger.LOGGER;
 
 public record ModuleRelease(String module, String version, Commit commit) {
-    private static final Pattern RELEASE_PATTERN = Pattern.compile("([\\w-]+)@([\\w.]+)");
+    private static final Pattern RELEASE_PATTERN = Pattern.compile("([\\w-]+)@([\\w.+-]+)");
 
     /// Parses a list of `ModuleReleases` from a release commit.
     ///
@@ -20,6 +20,9 @@ public record ModuleRelease(String module, String version, Commit commit) {
     /// each token is split by `@` to extract the module name and version.
     ///
     /// Malformed tokens (i.e. not containing exactly one `@`) are skipped and logged as errors.
+    ///
+    /// Versions may contain word chars, `.`, `-` and `+`, so pre-release/build qualifiers are kept
+    /// as-is (e.g. `25.1.0-EA1`, `1.0.0-SNAPSHOT`, `1.0.0+build.5`).
     ///
     /// @param releaseCommit the release commit to parse, identified by the `:bookmark:` gitmoji
     public static List<ModuleRelease> parseAll(Commit releaseCommit) {

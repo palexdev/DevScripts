@@ -45,6 +45,7 @@ import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
 public class UpdateChangelogs {
     static boolean COMMIT = false;
     static boolean DRY_RUN = false;
+    static String REPO_URL = null;
 
     static final String COMMIT_USER = "palexdev";
     static final String COMMIT_MAIL = "alessandro.parisi406@gmail.com";
@@ -54,6 +55,7 @@ public class UpdateChangelogs {
 
     static void main(String[] args){
         parseArgs(args);
+        resolveRepoUrl();
         updateProjectChangelogs();
         updateModulesChangelog();
         if (COMMIT) {
@@ -62,6 +64,18 @@ public class UpdateChangelogs {
             } else {
                 commit();
             }
+        }
+    }
+
+    /// Resolves the repository URL once, it's used to turn commit hashes into links.
+    ///
+    /// Not being able to resolve it is not fatal, hashes just fall back to plain text.
+    static void resolveRepoUrl() {
+        try {
+            REPO_URL = new GitRemoteUrlCommand().exec();
+            LOGGER.debug("Repository URL: " + REPO_URL);
+        } catch (Exception ex) {
+            LOGGER.warn("Could not resolve the repository URL, commit hashes won't be links.");
         }
     }
 
@@ -195,12 +209,14 @@ public class UpdateChangelogs {
             - To indicate to which module the commit belongs to, it should be indicated in the header as (<module1>, <module2>...)
             - The gitmoji in the commit tells to which category the changes belong to. If the gitmoji is not present
               or not recognized, it falls back to the Misc category.
+            - Commit hashes are linked to their commit page, using the URL of the 'origin' remote.
+              If the remote cannot be resolved, they fall back to the plain <commit hash> form.
             - Modules changelogs have this format:
               ## <release version> - <release date> - <release commit hash>
-              - <commit hash> <header message>
+              - [`<commit hash>`](<repo url>/commit/<commit hash>) <header message>
             - Project changelog has this format:
               ## Project - <release commit hash>
-              - <commit date> <commit hash> <header message>
+              - <commit date> [`<commit hash>`](<repo url>/commit/<commit hash>) <header message>
             - Dates are in the format of my country, sorry americans: dd-MM-yyyy
             
             ** Arguments **
@@ -241,6 +257,14 @@ public class UpdateChangelogs {
             Files.writeString(path, String.join("\n", content), StandardCharsets.UTF_8, TRUNCATE_EXISTING);
         }
 
+        /// Formats the commit hash as a Markdown link to its commit page on GitHub.
+        ///
+        /// Falls back to the plain `<hash>` form when the repository URL could not be resolved.
+        String formatHash(String hash) {
+            if (REPO_URL == null || REPO_URL.isBlank()) return "<%s>".formatted(hash);
+            return "[`%s`](%s/commit/%s)".formatted(hash, REPO_URL, hash);
+        }
+
         /// Reads the last `##` header line from the changelog file, hash is the last segment
         String readLastHash() throws IOException {
             if (!Files.exists(path)) return null;
@@ -274,7 +298,7 @@ public class UpdateChangelogs {
                 .replaceFirst("^:\\w+:\\s*", "") // strips gitmoji
                 .replaceFirst("\\(project\\)", "") // strips project tag
                 .trim();
-            return "- %s <%s> %s".formatted(commit.date(), commit.hash(), message);
+            return "- %s %s %s".formatted(commit.date(), formatHash(commit.hash()), message);
         }
 
         @Override
@@ -302,7 +326,7 @@ public class UpdateChangelogs {
                 .replaceFirst("^:\\w+:\\s*", "") // strips gitmoji
                 .replaceFirst("\\([^)]+\\)\\s*", "") // strips all modules tags
                 .trim();
-            return "- <%s> %s".formatted(commit.hash(), message);
+            return "- %s %s".formatted(formatHash(commit.hash()), message);
         }
 
         @Override

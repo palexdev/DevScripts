@@ -44,6 +44,7 @@ import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
 //@formatter:off
 public class UpdateChangelogs {
     static boolean COMMIT = false;
+    static boolean DRY_RUN = false;
 
     static final String COMMIT_USER = "palexdev";
     static final String COMMIT_MAIL = "alessandro.parisi406@gmail.com";
@@ -55,7 +56,13 @@ public class UpdateChangelogs {
         parseArgs(args);
         updateProjectChangelogs();
         updateModulesChangelog();
-        if (COMMIT) commit();
+        if (COMMIT) {
+            if (DRY_RUN) {
+                LOGGER.info("[dry-run] Skipping commit and push, nothing was written.");
+            } else {
+                commit();
+            }
+        }
     }
 
     static void updateProjectChangelogs() {
@@ -161,6 +168,9 @@ public class UpdateChangelogs {
         if (toArgsSet.contains("--commit")) {
             COMMIT = true;
         }
+        if (toArgsSet.contains("--dry-run")) {
+            DRY_RUN = true;
+        }
 
         String logArg = toArgsSet.ceiling("--log-level=");
         if (logArg != null && logArg.startsWith("--log-level=")) {
@@ -196,6 +206,8 @@ public class UpdateChangelogs {
             ** Arguments **
               • --help, -h          : Prints this help message.
               • --commit            : Updates the changelogs, makes a commit and pushes to remote
+              • --dry-run           : Prints the changelog entries to the console without writing any file
+                                      (nothing is committed or pushed either, even with --commit)
               • --log-level=<level> : Enables logging message. Available levels are TRACE, DEBUG, INFO, WARN, ERROR (by default, WARN)
             """;
         System.out.println(message);
@@ -211,7 +223,23 @@ public class UpdateChangelogs {
 
         abstract String buildHeader();
         abstract String formatCommit(Commit commit);
-        abstract void write(List<Commit> commits) throws IOException;
+        /// Builds the block of lines to prepend to the changelog
+        abstract List<String> buildEntry(List<Commit> commits);
+
+        /// Prepends the entry built by [#buildEntry(List)] to the changelog file.
+        ///
+        /// In dry-run mode nothing is touched on disk, the entry is just printed.
+        void write(List<Commit> commits) throws IOException {
+            List<String> toPrepend = buildEntry(commits);
+            if (DRY_RUN) {
+                LOGGER.info("[dry-run] %s would become:%n%s".formatted(path, String.join("\n", toPrepend).strip()));
+                return;
+            }
+            ensureFileExists();
+            List<String> content = new LinkedList<>(Files.readAllLines(path, StandardCharsets.UTF_8));
+            content.addAll(0, toPrepend);
+            Files.writeString(path, String.join("\n", content), StandardCharsets.UTF_8, TRUNCATE_EXISTING);
+        }
 
         /// Reads the last `##` header line from the changelog file, hash is the last segment
         String readLastHash() throws IOException {
@@ -250,15 +278,12 @@ public class UpdateChangelogs {
         }
 
         @Override
-        void write(List<Commit> commits) throws IOException {
-            ensureFileExists();
-            List<String> content = new LinkedList<>(Files.readAllLines(path, StandardCharsets.UTF_8));
-            List<String> toPrepend = new ArrayList<>();
-            toPrepend.add(buildHeader());
-            commits.stream().map(this::formatCommit).forEach(toPrepend::add);
-            toPrepend.add("\n\n");
-            content.addAll(0, toPrepend);
-            Files.writeString(path, String.join("\n", content), StandardCharsets.UTF_8, TRUNCATE_EXISTING);
+        List<String> buildEntry(List<Commit> commits) {
+            List<String> entry = new ArrayList<>();
+            entry.add(buildHeader());
+            commits.stream().map(this::formatCommit).forEach(entry::add);
+            entry.add("\n\n");
+            return entry;
         }
     }
 
@@ -281,21 +306,18 @@ public class UpdateChangelogs {
         }
 
         @Override
-        void write(List<Commit> commits)throws IOException {
-            ensureFileExists();
-            List<String> content = new LinkedList<>(Files.readAllLines(path, StandardCharsets.UTF_8));
-            List<String> toPrepend = new ArrayList<>();
-            toPrepend.add(buildHeader());
+        List<String> buildEntry(List<Commit> commits) {
+            List<String> entry = new ArrayList<>();
+            entry.add(buildHeader());
             Map<Category,List<Commit>> categorized = GitMojis.categorize(commits);
             for (Category category : GitMojis.CATEGORIES) {
                 List<Commit> byCat = categorized.get(category);
                 if (byCat == null || byCat.isEmpty()) continue;
-                toPrepend.add("\n### %s%n".formatted(category.name()));
-                byCat.stream().map(this::formatCommit).forEach(toPrepend::add);
+                entry.add("\n### %s%n".formatted(category.name()));
+                byCat.stream().map(this::formatCommit).forEach(entry::add);
             }
-            toPrepend.add("\n\n");
-            content.addAll(0, toPrepend);
-            Files.writeString(path, String.join("\n", content), StandardCharsets.UTF_8, TRUNCATE_EXISTING);
+            entry.add("\n\n");
+            return entry;
         }
     }
 }

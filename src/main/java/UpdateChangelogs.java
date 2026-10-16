@@ -7,57 +7,59 @@
 // FLOW
 //================================================================================
 // - parseArgs()
-// - updateProjectChangelog()
-//     - GitHeadHashCommand
-//     - compare with lastHash from file
-//     - GitCommitsBetweenCommand (module = "project")
-//     - ProjectChangelogWriter.write()
-// - updateModulesChangelog()
-//     - GitReleaseCommitsCommand
-//     - ModuleRelease.parseAll()
-//     - for each module:
-//         - compare hashes
-//         - findPrevRelease()
-//         - GitCommitsBetweenCommand
-//         - ModuleChangelogWriter.write()
+// - GitReleaseCommitsCommand
+// - MODE.updateChangelogs(), for modes.MultiModule:
+//     - updateProjectChangelog()
+//         - GitHeadHashCommand
+//         - compare with lastHash from file
+//         - GitCommitsBetweenCommand, commits with the (project) scope
+//         - ProjectChangelogWriter.write()
+//     - updateModulesChangelog()
+//         - ModuleRelease.parseAll()
+//         - for each module:
+//             - compare hashes
+//             - findPrevRelease()
+//             - GitCommitsBetweenCommand, commits with the (module) scope
+//             - ModuleChangelogWriter.write()
 // - commit() (only if --commit arg is present)
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.time.Instant;
 import java.util.*;
 
+import changelog.ChangelogOptions;
 import commons.Command;
 import commons.Logger.LogLevel;
 import commons.Utils;
-import git.*;
-import git.GitMojis.Category;
+import git.Commit;
+import git.GitReleaseCommitsCommand;
+import git.GitRemoteUrlCommand;
+import modes.MultiModule;
+import modes.ProjectMode;
+import modes.SingleModule;
 
 import static commons.Logger.LOGGER;
-import static commons.Utils.findPrevGitRelease;
-import static commons.Utils.instantToDate;
-import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
 
 //@formatter:off
 public class UpdateChangelogs {
     static boolean COMMIT = false;
     static boolean DRY_RUN = false;
     static String REPO_URL = null;
+    static ProjectMode MODE = new MultiModule();
+    static Path RELEASE_NOTES = null;
 
     static final String COMMIT_USER = "palexdev";
     static final String COMMIT_MAIL = "alessandro.parisi406@gmail.com";
     static final String COMMIT_AUTHOR = "github-actions[bot] <github-actions[bot]@users.noreply.github.com>";
 
-    static final Path CHANGELOGS_PATH = Paths.get("changelogs");
-
     static void main(String[] args){
         parseArgs(args);
         resolveRepoUrl();
-        updateProjectChangelogs();
-        updateModulesChangelog();
+        try {
+            List<Commit> releaseCommits = new GitReleaseCommitsCommand().exec();
+            MODE.updateChangelogs(releaseCommits, new ChangelogOptions(DRY_RUN, REPO_URL, RELEASE_NOTES));
+        } catch (Exception ex) {
+            LOGGER.error(ex);
+        }
         if (COMMIT) {
             if (DRY_RUN) {
                 LOGGER.info("[dry-run] Skipping commit and push, nothing was written.");
@@ -76,79 +78,6 @@ public class UpdateChangelogs {
             LOGGER.debug("Repository URL: " + REPO_URL);
         } catch (Exception ex) {
             LOGGER.warn("Could not resolve the repository URL, commit hashes won't be links.");
-        }
-    }
-
-    static void updateProjectChangelogs() {
-        LOGGER.info("Updating project changelog...");
-        try {
-            String headHash = new GitHeadHashCommand().exec();
-            var writer = new ProjectChangelogWriter(CHANGELOGS_PATH.resolve("project.md"), headHash);
-            String lastHash = writer.readLastHash();
-
-            if (headHash.equals(lastHash)) {
-                LOGGER.info("Project changelog is up to date.");
-                return;
-            }
-
-            List<Commit> commits = new GitCommitsBetweenCommand(lastHash, headHash, "project").exec();
-            commits = commits.stream()
-                .filter(c -> !c.header().contains("Updated changelogs"))
-                .toList();
-            if (commits.isEmpty()) {
-                LOGGER.info("No changes found for project, skipping...");
-                return;
-            }
-
-            LOGGER.info("Found %d commits since last update, updating...".formatted(commits.size()));
-            writer.write(commits);
-        } catch (Exception ex) {
-            LOGGER.error(ex);
-        }
-    }
-
-    static void updateModulesChangelog() {
-        LOGGER.info("Updating modules changelogs...");
-        try {
-            List<Commit> releaseCommits = new GitReleaseCommitsCommand().exec();
-            if (releaseCommits.isEmpty()) {
-                LOGGER.warn("No release commits found.");
-                return;
-            }
-
-            List<ModuleRelease> releases = ModuleRelease.parseAll(releaseCommits.getFirst());
-            LOGGER.info("Found releases: " + String.join(",", releases.stream().map(ModuleRelease::module).toList()));
-            for (ModuleRelease release : releases) {
-                String module = release.module();
-                LOGGER.trace("Processing module: " + module);
-                Path path = CHANGELOGS_PATH.resolve(module + ".md");
-                var writer = new ModuleChangelogWriter(path, release);
-                String lastHash = writer.readLastHash();
-                if(release.commit().hash().equals(lastHash)) {
-                    LOGGER.info("Module changelog for %s is up to date, skipping...".formatted(module));
-                    continue;
-                }
-
-                String prevReleaseHash = findPrevGitRelease(module, releaseCommits, releaseCommits.getFirst());
-                if (Boolean.getBoolean(Utils.TRANSITIONING) && prevReleaseHash == null) {
-                    LOGGER.warn("Could not find previous release for module %s".formatted(module));
-                    prevReleaseHash = IO.readln("Prev release hash: ").trim();
-                    if (prevReleaseHash.isBlank()) {
-                        LOGGER.error("Invalid hash, skipping...");
-                        continue;
-                    }
-                }
-                List<Commit> commits = new GitCommitsBetweenCommand(prevReleaseHash, release.commit().hash(), module).exec();
-                if (commits.isEmpty()) {
-                    LOGGER.info("No changes found for module %s, skipping...".formatted(module));
-                    continue;
-                }
-
-                LOGGER.info("Found %d commits for module %s since last update, updating...".formatted(commits.size(), module));
-                writer.write(commits);
-            }
-        } catch (Exception ex) {
-            LOGGER.error(ex);
         }
     }
 
@@ -184,6 +113,14 @@ public class UpdateChangelogs {
         }
         if (toArgsSet.contains("--dry-run")) {
             DRY_RUN = true;
+        }
+        if (toArgsSet.contains("--single")) {
+            MODE = new SingleModule();
+        }
+
+        String notesArg = toArgsSet.ceiling("--release-notes=");
+        if (notesArg != null && notesArg.startsWith("--release-notes=")) {
+            RELEASE_NOTES = Path.of(notesArg.split("=", 2)[1]);
         }
 
         String logArg = toArgsSet.ceiling("--log-level=");
@@ -224,124 +161,12 @@ public class UpdateChangelogs {
               • --commit            : Updates the changelogs, makes a commit and pushes to remote
               • --dry-run           : Prints the changelog entries to the console without writing any file
                                       (nothing is committed or pushed either, even with --commit)
+              • --single            : Single-module project: commits have no (module) scope, the release commit is
+                                      ":bookmark: <text> <version>", and the notes of the latest release are written
+                                      to --release-notes instead of the changelogs folder
+              • --release-notes=<file> : Where --single writes the release notes
               • --log-level=<level> : Enables logging message. Available levels are TRACE, DEBUG, INFO, WARN, ERROR (by default, WARN)
             """;
         System.out.println(message);
-    }
-
-    //================================================================================
-    // WRITERS
-    //================================================================================
-
-    static abstract class ChangelogWriter {
-        final Path path;
-        ChangelogWriter(Path path) {this.path = path;}
-
-        abstract String buildHeader();
-        abstract String formatCommit(Commit commit);
-        /// Builds the block of lines to prepend to the changelog
-        abstract List<String> buildEntry(List<Commit> commits);
-
-        /// Prepends the entry built by [#buildEntry(List)] to the changelog file.
-        ///
-        /// In dry-run mode nothing is touched on disk, the entry is just printed.
-        void write(List<Commit> commits) throws IOException {
-            List<String> toPrepend = buildEntry(commits);
-            if (DRY_RUN) {
-                LOGGER.info("[dry-run] %s would become:%n%s".formatted(path, String.join("\n", toPrepend).strip()));
-                return;
-            }
-            ensureFileExists();
-            List<String> content = new LinkedList<>(Files.readAllLines(path, StandardCharsets.UTF_8));
-            content.addAll(0, toPrepend);
-            Files.writeString(path, String.join("\n", content), StandardCharsets.UTF_8, TRUNCATE_EXISTING);
-        }
-
-        /// Formats the commit hash as a Markdown link to its commit page on GitHub.
-        ///
-        /// Falls back to the plain `<hash>` form when the repository URL could not be resolved.
-        String formatHash(String hash) {
-            if (REPO_URL == null || REPO_URL.isBlank()) return "<%s>".formatted(hash);
-            return "[`%s`](%s/commit/%s)".formatted(hash, REPO_URL, hash);
-        }
-
-        /// Reads the last `##` header line from the changelog file, hash is the last segment
-        String readLastHash() throws IOException {
-            if (!Files.exists(path)) return null;
-            List<String> allLines = Files.readAllLines(path, StandardCharsets.UTF_8);
-            return allLines.stream()
-                .filter(l -> l.startsWith("## "))
-                .findFirst()
-                .map(l -> l.split(" - "))
-                .map(parts -> parts[parts.length - 1].trim())
-                .orElse(null);
-        }
-
-        void ensureFileExists() throws IOException {
-            if (!Files.exists(path)) {
-                Files.createDirectories(path.getParent());
-                Files.createFile(path);
-            }
-        }
-    }
-
-    static class ProjectChangelogWriter extends ChangelogWriter {
-        final String hash;
-        ProjectChangelogWriter(Path path, String hash) {super(path); this.hash = hash;}
-
-        @Override
-        String buildHeader() {return "## %s - %s%n".formatted("Project", hash);}
-
-        @Override
-        String formatCommit(Commit commit) {
-            String message = commit.header()
-                .replaceFirst("^:\\w+:\\s*", "") // strips gitmoji
-                .replaceFirst("\\(project\\)", "") // strips project tag
-                .trim();
-            return "- %s %s %s".formatted(commit.date(), formatHash(commit.hash()), message);
-        }
-
-        @Override
-        List<String> buildEntry(List<Commit> commits) {
-            List<String> entry = new ArrayList<>();
-            entry.add(buildHeader());
-            commits.stream().map(this::formatCommit).forEach(entry::add);
-            entry.add("\n\n");
-            return entry;
-        }
-    }
-
-    static class ModuleChangelogWriter extends ChangelogWriter {
-        final ModuleRelease release;
-        ModuleChangelogWriter(Path path, ModuleRelease release) {super(path); this.release = release;}
-
-        @Override
-        String buildHeader() {
-            return "## %s - %s - %s".formatted(release.version(), instantToDate(Instant.now()), release.commit().hash());
-        }
-
-        @Override
-        String formatCommit(Commit commit) {
-            String message = commit.header()
-                .replaceFirst("^:\\w+:\\s*", "") // strips gitmoji
-                .replaceFirst("\\([^)]+\\)\\s*", "") // strips all modules tags
-                .trim();
-            return "- %s %s".formatted(formatHash(commit.hash()), message);
-        }
-
-        @Override
-        List<String> buildEntry(List<Commit> commits) {
-            List<String> entry = new ArrayList<>();
-            entry.add(buildHeader());
-            Map<Category,List<Commit>> categorized = GitMojis.categorize(commits);
-            for (Category category : GitMojis.CATEGORIES) {
-                List<Commit> byCat = categorized.get(category);
-                if (byCat == null || byCat.isEmpty()) continue;
-                entry.add("\n### %s%n".formatted(category.name()));
-                byCat.stream().map(this::formatCommit).forEach(entry::add);
-            }
-            entry.add("\n\n");
-            return entry;
-        }
     }
 }

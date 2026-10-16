@@ -12,6 +12,9 @@ import commons.ProcessOutputPolicy;
 import git.Commit;
 import git.GitReleaseCommitsCommand;
 import git.ModuleRelease;
+import modes.MultiModule;
+import modes.ProjectMode;
+import modes.SingleModule;
 
 import static commons.Logger.LOGGER;
 import static commons.OS.os;
@@ -19,6 +22,7 @@ import static commons.OS.os;
 // @formatter:off
 public class Release {
     static boolean DRY_RUN = false;
+    static ProjectMode MODE = new MultiModule();
 
     static final Path GRADLEW = Paths.get(os() == OS.Windows ? "gradlew.bat" : "gradlew");
 
@@ -37,7 +41,7 @@ public class Release {
             Commit release = releaseCommits.getFirst();
             LOGGER.debug("Head commit: [%s] %s".formatted(release.hash(), release.header()));
 
-            List<ModuleRelease> releases = ModuleRelease.parseAll(release);
+            List<ModuleRelease> releases = MODE.releases(release);
             if (releases.isEmpty()) {
                 LOGGER.info("✅ No modules to release.");
                 return;
@@ -45,7 +49,7 @@ public class Release {
 
             if (DRY_RUN) {
                 StringBuilder sb = new StringBuilder("Modules to release:");
-                releases.forEach(r -> sb.append("  - %s@%s%n".formatted(r.module(), r.version())));
+                releases.forEach(r -> sb.append("  - %s@%s (%s)%n".formatted(r.module(), r.version(), MODE.publishTask(r))));
                 LOGGER.info(sb.toString());
                 return;
             }
@@ -60,7 +64,7 @@ public class Release {
     static void release(ModuleRelease release) {
         try {
             LOGGER.info("🚀 Releasing: %s@%s%n".formatted(release.module(), release.version()));
-            Command.command(GRADLEW.toAbsolutePath().toString(), ":%s:publishAndReleaseToMavenCentral".formatted(release.module()))
+            Command.command(GRADLEW.toAbsolutePath().toString(), MODE.publishTask(release))
                 .withOutputPolicy(ProcessOutputPolicy.INHERIT)
                 .exec();
         } catch (Exception ex) {
@@ -76,6 +80,7 @@ public class Release {
             System.exit(0);
         }
         if (argSet.contains("--dry-run")) DRY_RUN = true;
+        if (argSet.contains("--single")) MODE = new SingleModule();
 
         String logArg = argSet.ceiling("--log-level=");
         if (logArg != null && logArg.startsWith("--log-level=")) {
@@ -93,7 +98,9 @@ public class Release {
 
             ** Arguments **
               • --help, -h          : Prints this help message.
-              • --dry-run           : Prints the modules that would be released without publishing.
+              • --dry-run           : Prints the modules that would be released, and their Gradle task, without publishing.
+              • --single            : Single-module project: the release commit is ":bookmark: <text> <version>",
+                                      and the root project is published.
               • --log-level=<level> : Sets log verbosity. Levels: TRACE, DEBUG, INFO, WARN, ERROR (default: WARN)
             """;
         System.out.println(message);

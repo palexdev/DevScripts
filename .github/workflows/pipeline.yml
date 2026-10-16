@@ -74,6 +74,7 @@ jobs:
   native:
     needs: release
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest

@@ -41,7 +41,7 @@ class MultiModuleTest {
         )), repo.read("changelogs/ui.md"));
 
         assertEquals(String.join("\n", List.of(
-            "## Project - %s%n".formatted(release),
+            "## Project - %s\n".formatted(release),
             "- %s %s Tidy the build".formatted(GitRepo.today(), GitRepo.link(build)),
             "\n\n"
         )), repo.read("changelogs/project.md"));

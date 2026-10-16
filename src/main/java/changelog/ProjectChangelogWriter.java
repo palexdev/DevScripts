@@ -15,7 +15,7 @@ public class ProjectChangelogWriter extends ChangelogWriter {
     }
 
     @Override
-    protected String buildHeader() {return "## %s - %s%n".formatted("Project", hash);}
+    protected String buildHeader() {return "## %s - %s\n".formatted("Project", hash);}
 
     @Override
     protected String formatCommit(Commit commit) {

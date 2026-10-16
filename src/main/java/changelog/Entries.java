@@ -27,7 +27,7 @@ public final class Entries {
         for (Category category : GitMojis.CATEGORIES) {
             List<Commit> byCat = categorized.get(category);
             if (byCat == null || byCat.isEmpty()) continue;
-            entry.add("\n### %s%n".formatted(category.name()));
+            entry.add("\n### %s\n".formatted(category.name()));
             byCat.stream().map(format).forEach(entry::add);
         }
         entry.add("\n\n");

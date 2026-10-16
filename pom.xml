@@ -7,7 +7,7 @@
 
     <groupId>io.github.palexdev</groupId>
     <artifactId>devtools</artifactId>
-    <version>1.0</version>
+    <version>25.1.0</version>
 
     <dependencyManagement>
         <dependencies>

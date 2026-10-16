@@ -10,6 +10,7 @@ final class GitRepo {
     static final String REPO_URL = "https://github.com/test/repo";
     private static final Path CLASSES = Path.of("target", "classes").toAbsolutePath();
     private static final String JAVA = ProcessHandle.current().info().command().orElse("java");
+    private static final boolean WINDOWS = System.getProperty("os.name").startsWith("Windows");
 
     final Path dir;
 
@@ -28,7 +29,10 @@ final class GitRepo {
     }
 
     Result run(String mainClass, String... args) throws Exception {
-        List<String> command = new ArrayList<>(List.of(JAVA, "-cp", CLASSES.toString(), mainClass));
+        String nativeDir = System.getProperty("devscripts.native");
+        List<String> command = new ArrayList<>(nativeDir != null
+            ? List.of(Path.of(nativeDir, mainClass + (WINDOWS ? ".exe" : "")).toAbsolutePath().toString())
+            : List.of(JAVA, "-cp", CLASSES.toString(), mainClass));
         command.addAll(List.of(args));
         Process process = new ProcessBuilder(command).directory(dir.toFile()).redirectErrorStream(true).start();
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);

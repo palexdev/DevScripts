@@ -1,0 +1,117 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '25'
+
+      - name: Test
+        run: sh ./mvnw -B test
+
+  release:
+    if: ${{ startsWith(github.event.head_commit.message, ':bookmark:') }}
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '25'
+
+      - name: Build jars
+        run: sh ./mvnw -B -DskipTests package
+
+      - name: Extract version
+        id: version
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          VERSION=$(echo "$MESSAGE" | head -1 | sed 's/:bookmark://' | grep -oP '\bv?\K\d+(\.\d+)+([-+][\w.+-]*)?' | head -1)
+          if [[ -z "$VERSION" ]]; then
+            echo "No version found in the release commit" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Write release notes
+        run: java -cp target/classes UpdateChangelogs --single --release-notes=notes.md
+
+      - name: Create release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: 'v${{ steps.version.outputs.version }}'
+          commit: ${{ github.sha }}
+          name: 'v${{ steps.version.outputs.version }}'
+          bodyFile: 'notes.md'
+          artifacts: 'target/Release.jar,target/UpdateChangelogs.jar'
+
+  native:
+    needs: release
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+            ext: ''
+          - os: windows-latest
+            platform: windows-x64
+            ext: '.exe'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: 'graalvm-community'
+          java-version: '25'
+
+      - name: Build native images
+        run: sh ./mvnw -B -Pnative package
+
+      - name: Test native images
+        run: sh ./mvnw -B test -Ddevscripts.native=target
+
+      - name: Name the binaries
+        run: |
+          mkdir dist
+          cp target/Release${{ matrix.ext }} dist/Release-${{ matrix.platform }}${{ matrix.ext }}
+          cp target/UpdateChangelogs${{ matrix.ext }} dist/UpdateChangelogs-${{ matrix.platform }}${{ matrix.ext }}
+
+      - name: Upload to the release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: 'v${{ needs.release.outputs.version }}'
+          allowUpdates: true
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          artifacts: 'dist/*'
